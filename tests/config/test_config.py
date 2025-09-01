@@ -137,14 +137,38 @@ def test_csv_regex_error(capsys: CaptureFixture) -> None:
     """
     with pytest.raises(SystemExit):
         Run(
-            [str(EMPTY_MODULE), r"--bad-names-rgx=(foo{1,3})"],
+            [str(EMPTY_MODULE), r"--bad-names-rgx=[\p{Han}a-z_]"],
             exit=False,
         )
     output = capsys.readouterr()
     assert (
-        r"Error in provided regular expression: (foo{1 beginning at index 0: missing ), unterminated subpattern"
+        r"Error in provided regular expression: [\p{Han}a-z_] beginning at index 1: bad escape \p"
         in output.err
     )
+
+
+def test_csv_regex_with_comma_quantifiers() -> None:
+    """Check that regular expressions with comma quantifiers work correctly in CSV."""
+    # This should work without error - regex with comma in quantifier
+    runner = Run(
+        [str(EMPTY_MODULE), r"--bad-names-rgx=(foo{1,3})"],
+        exit=False,
+    )
+    # Should successfully parse the regex
+    bad_names_rgxs = runner.linter.config.bad_names_rgxs
+    assert len(bad_names_rgxs) == 1
+    assert bad_names_rgxs[0].pattern == "(foo{1,3})"
+    
+    # Test multiple regexes, some with comma quantifiers
+    runner = Run(
+        [str(EMPTY_MODULE), r"--bad-names-rgx=^test$,(foo{1,3}),bar{2,5}"],
+        exit=False,
+    )
+    bad_names_rgxs = runner.linter.config.bad_names_rgxs
+    assert len(bad_names_rgxs) == 3
+    assert bad_names_rgxs[0].pattern == "^test$"
+    assert bad_names_rgxs[1].pattern == "(foo{1,3})"
+    assert bad_names_rgxs[2].pattern == "bar{2,5}"
 
 
 def test_short_verbose(capsys: CaptureFixture) -> None:
