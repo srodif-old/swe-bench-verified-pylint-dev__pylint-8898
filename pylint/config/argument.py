@@ -111,10 +111,52 @@ def _regex_transformer(value: str) -> Pattern[str]:
         raise argparse.ArgumentTypeError(msg) from e
 
 
+def _regexp_csv_split(value: str) -> list[str]:
+    """Split a comma-separated string while respecting regex syntax.
+    
+    This function splits on commas but treats commas inside curly braces
+    as part of the regex syntax (e.g., in quantifiers like {1,3}).
+    """
+    if not value:
+        return []
+        
+    patterns = []
+    current_pattern = ""
+    brace_depth = 0
+    i = 0
+    
+    while i < len(value):
+        char = value[i]
+        
+        if char == '{':
+            brace_depth += 1
+            current_pattern += char
+        elif char == '}':
+            brace_depth -= 1
+            current_pattern += char
+        elif char == ',' and brace_depth == 0:
+            # Comma outside of braces - this is a separator
+            pattern = current_pattern.strip()
+            if pattern:  # Only add non-empty patterns
+                patterns.append(pattern)
+            current_pattern = ""
+        else:
+            current_pattern += char
+        
+        i += 1
+    
+    # Add the last pattern
+    pattern = current_pattern.strip()
+    if pattern:
+        patterns.append(pattern)
+    
+    return patterns
+
+
 def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
     """Transforms a comma separated list of regular expressions."""
     patterns: list[Pattern[str]] = []
-    for pattern in _csv_transformer(value):
+    for pattern in _regexp_csv_split(value):
         patterns.append(_regex_transformer(pattern))
     return patterns
 
@@ -122,7 +164,7 @@ def _regexp_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
 def _regexp_paths_csv_transfomer(value: str) -> Sequence[Pattern[str]]:
     """Transforms a comma separated list of regular expressions paths."""
     patterns: list[Pattern[str]] = []
-    for pattern in _csv_transformer(value):
+    for pattern in _regexp_csv_split(value):
         patterns.append(
             re.compile(
                 str(pathlib.PureWindowsPath(pattern)).replace("\\", "\\\\")
